@@ -78,28 +78,32 @@ class BrainSequence(Sequence):
         return np.array(batch_img), np.array(batch_y)
 
 
-def slice_generator(image_files, n_slices, size, out_dir):
+def slice_generator(image_file, n_slices, size, out_dir):
     """
     Image generator.
 
-    creates slices of a given size over a dataset of images and saves them
+    creates slices of a given size for an image and saves them
     to disk.
-    image_filenames: list of image files in disk.
-    n_slices: number of slices for each image.
+    image_filename: Filename of the image.
+    n_slices: number of slices.
     size: size of the slices.
     out_dir: output directory.
+
+    Returns the paths of each of the saved slices.
     """
     # for each image file
-    for path in image_files:
-        # load img
-        img = load_img(path)
-        # For each slice
-        for n in range(n_slices):
-            # Crop the image
-            img_crop = crop_volume(img, size, mode="Random")
-            # Create output dir
-            out_file = out_dir + os.path.basename(path) + '_crop' + str(n) + '.png'
-            save_img(img_crop, out_file)
+    crop_paths = []
+    # load img
+    img = load_img(image_file)
+    # For each slice
+    for n in range(n_slices):
+        # Crop the image
+        img_crop = crop_volume(img, size, mode="Random")
+        # Create output dir
+        out_file = out_dir + os.path.basename(image_file) + '_crop' + str(n) + '.png'
+        crop_paths.append(out_file)
+        save_img(img_crop, out_file)
+    return crop_paths
 
 
 def save_img(img, path):
