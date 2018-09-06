@@ -2,17 +2,21 @@
 Main function that trains the model from input data.
 
 This function gathers the data and feeds tensors into the network, training it.
+module load cuDNN/7.0.5-CUDA-9.0.176
+module load CUDA/9.0.176
+
+
 """
 
-from model import c3d
-from utils import crop_volume
-from dataio import BrainSequence, slice_generator
+# from model import c3d
+from dataio import slice_generator
 from bids.grabbids import BIDSLayout
 import pandas as pd
 import configparser
 import time
 import argparse
 import os
+
 
 # Parser
 def get_parser():
@@ -21,15 +25,15 @@ def get_parser():
                         type=str, nargs=1, required=True, help='config file')
     parser.add_argument("--output_directory_name", type=str, nargs=1,
                         required=True, help='directory where the output will be')
-    parser.add_argument("--crop", type=str, action="store_true",
+    parser.add_argument("--crop", action="store_true",
                         help='wether to make new cropping or not.')
 
     return parser
 
 
-def train(config_file, out_dir_name):
+def train(config_file, out_dir_name, crop):
     """
-    Main function for training.
+    Execute Main function for training.
 
     Trains the model with a given dataset.
     """
@@ -46,27 +50,31 @@ def train(config_file, out_dir_name):
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
+    crops_dir = out_dir + os.sep + 'CROPS'
+    if not os.path.exists(crops_dir):
+        os.makedirs(crops_dir)
     # The crops folder is a parent directory where all the
     # images are stored. The metadata file associates each
     # image to its label
-    crop_metadata_file = config["data"]["metadata_crops"]
-    df_metadata = None
+    crop_metadata_file = out_dir + config["data"]["metadata_crops"]
     # Create crops (optional), if already done there is no need.
-    if args.crop:
+    if crop:
         # Load dataset and labels using BIDS
         # The metadata file contains information about
         # all the samples we will use. All the subjects mentioned in the
         # metadata must have a corresponding MRI image present
         # in the BIDS folder.
         bids_folder = config["data"]["bids_folder"]
-        metadata_file = config["data"]["bids_folder"]
+        metadata_file = config["data"]["metadata"]
+        df_metadata = pd.read_csv(metadata_file)
         layout = BIDSLayout(bids_folder)
 
         # For each entry in the metadata file
         rows_list = []
-        for subj in metadata_file.itertuples():
+        for subj in df_metadata.itertuples():
             # locate the corresponding MRI scan
-            ptid = subj["PTID"]
+            print(subj)
+            ptid = subj.PTID
             ptid_bids = 'ADNI' + ptid[0:3] + 'S' + ptid[7:]
             # Hardcoded baselines
             file = layout.get(subject=ptid_bids, extensions='.nii.gz',
@@ -74,12 +82,12 @@ def train(config_file, out_dir_name):
                               return_type='file')[0]
             # Actually perform the cropping
             size = config["general"]["size"]
-            n_slices = config["general"]["n_slices"]
-            new_crops = slice_generator(file, n_slices, size, out_dir)
+            n_slices = int(config["general"]["n_slices"])
+            new_crops = slice_generator(file, n_slices, size, crops_dir)
             # Iterate over all the new crops
             for crop in new_crops:
                 dict = {"path": crop,
-                        "DX": subj["DX"]}
+                        "DX": subj.DX}
                 rows_list.append(dict)
         # Save the new info about the image in df_crop
         df_crop = pd.DataFrame(rows_list)
@@ -117,4 +125,4 @@ def train(config_file, out_dir_name):
 if __name__ == '__main__':
     parser = get_parser()
     args = parser.parse_args()
-    train(args.config_file[0], args.output_directory_name[0])
+    train(args.config_file[0], args.output_directory_name[0], args.crop)

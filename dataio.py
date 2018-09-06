@@ -8,16 +8,21 @@ https://github.com/DLTK
 """
 import SimpleITK as sitk
 import os
+import numpy as np
+from utils import crop_volume
+from keras.utils import Sequence
+import pandas as pd
+from bids.grabbids import BIDSLayout
+
+"""
 import tensorflow as tf
 import pandas as pd
 import time
-import numpy as np
 from matplotlib import pyplot as plt
 from dltk.io.augmentation import *
 from dltk.io.preprocessing import *
-from keras.utils import Sequence
+"""
 
-from utils import crop_volume
 
 class BrainSequence(Sequence):
     """
@@ -77,6 +82,43 @@ class BrainSequence(Sequence):
             batch_img.append(img)
         return np.array(batch_img), np.array(batch_y)
 
+def make_crops(bids_folder, metadata_file, n_slices, size, out_dir, out_file):
+    """
+    Create a new dataset of crops from an existing dataset.
+
+    Given a folder of images, and a csv file containing the info
+    about the dataset, this function makes random crops of the images and
+    save them to disk
+    bids_folder: folder where the images are stored (in BIDS format)
+    metadata_file: path to csv file where the info about images is stored.
+    n_slices: number of crops to do
+    size: size of the crops, in 3D
+    out_dir: directory where to save the cropped images
+    out_file: file where to store the info about the crops
+    """
+    df_metadata = pd.read_csv(metadata_file)
+    layout = BIDSLayout(bids_folder)
+
+    # For each entry in the metadata file
+    rows_list = []
+    for subj in df_metadata.itertuples():
+        # locate the corresponding MRI scan
+        ptid = subj["PTID"]
+        ptid_bids = 'ADNI' + ptid[0:3] + 'S' + ptid[7:]
+        # Hardcoded baselines
+        file = layout.get(subject=ptid_bids, extensions='.nii.gz',
+                          modality='anat', session='M00',
+                          return_type='file')[0]
+        # Actually perform the cropping
+        new_crops = slice_generator(file, n_slices, size, out_dir)
+        # Iterate over all the new crops
+        for crop in new_crops:
+            dict = {"path": crop,
+                    "DX": subj["DX"]}
+            rows_list.append(dict)
+    # Save the new info about the image in df_crop
+    df_crop = pd.DataFrame(rows_list)
+    df_crop.to_csv(out_file)
 
 def slice_generator(image_file, n_slices, size, out_dir):
     """
