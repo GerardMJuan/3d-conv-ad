@@ -82,6 +82,7 @@ class BrainSequence(Sequence):
             batch_img.append(img)
         return np.array(batch_img), np.array(batch_y)
 
+
 def make_crops(bids_folder, metadata_file, n_slices, size, out_dir, out_file):
     """
     Create a new dataset of crops from an existing dataset.
@@ -103,8 +104,8 @@ def make_crops(bids_folder, metadata_file, n_slices, size, out_dir, out_file):
     rows_list = []
     for subj in df_metadata.itertuples():
         # locate the corresponding MRI scan
-        ptid = subj["PTID"]
-        ptid_bids = 'ADNI' + ptid[0:3] + 'S' + ptid[7:]
+        ptid = subj.PTID
+        ptid_bids = 'ADNI' + ptid[0:3] + 'S' + ptid[6:]
         # Hardcoded baselines
         file = layout.get(subject=ptid_bids, extensions='.nii.gz',
                           modality='anat', session='M00',
@@ -114,11 +115,12 @@ def make_crops(bids_folder, metadata_file, n_slices, size, out_dir, out_file):
         # Iterate over all the new crops
         for crop in new_crops:
             dict = {"path": crop,
-                    "DX": subj["DX"]}
+                    "DX": subj.DX}
             rows_list.append(dict)
     # Save the new info about the image in df_crop
     df_crop = pd.DataFrame(rows_list)
     df_crop.to_csv(out_file)
+
 
 def slice_generator(image_file, n_slices, size, out_dir):
     """
@@ -142,7 +144,7 @@ def slice_generator(image_file, n_slices, size, out_dir):
         # Crop the image
         img_crop = crop_volume(img, size, mode="Random")
         # Create output dir
-        out_file = out_dir + os.path.basename(image_file) + '_crop' + str(n) + '.png'
+        out_file = out_dir + os.path.basename(image_file) + '_crop' + str(n) + '.nii.gz'
         crop_paths.append(out_file)
         save_img(img_crop, out_file)
     return crop_paths

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Main function that trains the model from input data.
 
@@ -9,8 +10,7 @@ module load CUDA/9.0.176
 """
 
 # from model import c3d
-from dataio import slice_generator
-from bids.grabbids import BIDSLayout
+from dataio import make_crops
 import pandas as pd
 import configparser
 import time
@@ -20,6 +20,7 @@ import os
 
 # Parser
 def get_parser():
+    """Parse data for main function."""
     parser = argparse.ArgumentParser(description='Training 3D conv network.')
     parser.add_argument("--config_file",
                         type=str, nargs=1, required=True, help='config file')
@@ -50,7 +51,7 @@ def train(config_file, out_dir_name, crop):
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
-    crops_dir = out_dir + os.sep + 'CROPS'
+    crops_dir = out_dir + os.sep + 'CROPS' + os.sep
     if not os.path.exists(crops_dir):
         os.makedirs(crops_dir)
     # The crops folder is a parent directory where all the
@@ -66,32 +67,11 @@ def train(config_file, out_dir_name, crop):
         # in the BIDS folder.
         bids_folder = config["data"]["bids_folder"]
         metadata_file = config["data"]["metadata"]
-        df_metadata = pd.read_csv(metadata_file)
-        layout = BIDSLayout(bids_folder)
+        size = config["general"]["size"]
+        n_slices = int(config["general"]["slices"])
 
-        # For each entry in the metadata file
-        rows_list = []
-        for subj in df_metadata.itertuples():
-            # locate the corresponding MRI scan
-            print(subj)
-            ptid = subj.PTID
-            ptid_bids = 'ADNI' + ptid[0:3] + 'S' + ptid[7:]
-            # Hardcoded baselines
-            file = layout.get(subject=ptid_bids, extensions='.nii.gz',
-                              modality='anat', session='M00',
-                              return_type='file')[0]
-            # Actually perform the cropping
-            size = config["general"]["size"]
-            n_slices = int(config["general"]["n_slices"])
-            new_crops = slice_generator(file, n_slices, size, crops_dir)
-            # Iterate over all the new crops
-            for crop in new_crops:
-                dict = {"path": crop,
-                        "DX": subj.DX}
-                rows_list.append(dict)
-        # Save the new info about the image in df_crop
-        df_crop = pd.DataFrame(rows_list)
-        df_crop.to_csv(crop_metadata_file)
+        make_crops(bids_folder, metadata_file, n_slices,
+                   size, crops_dir, crop_metadata_file)
 
     else:
         df_metadata = pd.read_csv(crop_metadata_file)
@@ -104,7 +84,7 @@ def train(config_file, out_dir_name, crop):
     # Initialize model
 
     # Train
-    print('Procés finished.')
+    print('Proces finished.')
     t1 = time.time()
     print('Time to compute the script: ', t1 - t0)
 

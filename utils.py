@@ -19,7 +19,7 @@ def crop_volume(img, size, mode="Random"):
     if mode == "Random":
         # size of img
         x, y, z = img.shape
-        x_crop, y_crop, z_crop = size
+        x_crop, y_crop, z_crop = [int(x) for x in size.split(',')]
         # the initial point can go from 0 to x - x_crop.
         new_x = random.randint(0, x-x_crop-1)
         new_y = random.randint(0, y-y_crop-1)
