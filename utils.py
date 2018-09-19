@@ -4,32 +4,26 @@ Utils.
 Other functions that are useful for the implementation.
 """
 
-import random
+import SimpleITK as sitk
 
 
-def crop_volume(img, size, mode="Random"):
+def resize_image(img, new_size):
     """
-    Crop an slice of a fixed size from an image.
+    Resample brain MRI image to specified spacing, size_out and spacing out.
 
-    img: image to crop.
-    size: size of the cropping:
-    mode: Type of cropping. Modes supported:
-        Random: random cropping, that fits inside the image.
+    img: The MRI image to resample.
+    new_size: The spacing of the image we want.
+
+    Function adapted from CODE/scripts_py/resample_image.py
     """
-    if mode == "Random":
-        # size of img
-        x, y, z = img.shape
-        x_crop, y_crop, z_crop = [int(x) for x in size.split(',')]
-        # the initial point can go from 0 to x - x_crop.
-        new_x = random.randint(0, x-x_crop-1)
-        new_y = random.randint(0, y-y_crop-1)
-        new_z = random.randint(0, z-z_crop-1)
-
-        img_cropped = img[new_x:new_x+x_crop,
-                          new_y:new_y+y_crop,
-                          new_z:new_z+z_crop]
-
-        return img_cropped
-
-    else:
-        raise ValueError("Mode of cropping not supported!")
+    sz_in, sp_in = img.GetSize(), img.GetSpacing()
+    or_in, dir_in = img.GetOrigin(), img.GetDirection()
+    new_size = [int(x) for x in new_size]
+    new_spacing = [old_sz*old_spc/new_sz for old_sz, old_spc, new_sz in
+                   zip(sz_in, sp_in, new_size)]
+    t = sitk.Transform(3, sitk.sitkScale)
+    # TODO: IF NEEDED, ADD GAUSSIAN SMOOTHING
+    out_sitk = sitk.Resample(img, new_size, t, sitk.sitkLinear,
+                             or_in, new_spacing,
+                             dir_in, 0.0, sitk.sitkFloat32)
+    return out_sitk
