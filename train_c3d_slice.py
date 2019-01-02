@@ -1,16 +1,12 @@
-# -*- coding: utf-8 -*-
+    # -*- coding: utf-8 -*-
 """
-Main function that trains the model from input data.
+Main function that trains the model from input data, using a c3d pretrained net.
 
 This function gathers the data and feeds tensors into the network, training it.
-module load cuDNN/7.0.5-CUDA-9.0.176
-module load CUDA/9.0.176
-
-
 """
 
-from model import c3d_base
-from dataio import make_crops, BrainSequence
+from utils.model import c3d_base
+from utils.dataio import make_crops, BrainSequence
 import pandas as pd
 import configparser
 import time
@@ -19,8 +15,12 @@ import os
 import numpy as np
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics import log_loss
-from keras.optimizers import SGD
+from keras.optimizers import SGD, Adam
 from keras.utils import to_categorical
+from keras.callbacks import TensorBoard
+import bids.layout
+
+
 # Parser
 def get_parser():
     """Parse data for main function."""
@@ -54,6 +54,15 @@ def train(config_file, out_dir_name, crop):
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
+    # Load tranining parameters
+    batch_size = int(config["model"]["batch_size"])
+    new_img_size = (int(x) for x in config["general"]["new_size"].split(','))
+    epochs = int(config["model"]["epochs"])
+    weights_file = config["model"]["weights"]
+    mean_file = config["model"]["mean"]
+    metadata_file = config["data"]["metadata"]
+    bids_folder = config["data"]["bids_folder"]
+
     crops_dir = out_dir + '/' + 'CROPS' + '/'
     if not os.path.exists(crops_dir):
         os.makedirs(crops_dir)
@@ -78,7 +87,7 @@ def train(config_file, out_dir_name, crop):
     df_metadata = pd.read_csv(crop_metadata_file)
 
     # Get list of unique subjects
-    subj = df_metadata.subj.values
+    subj = df_metadata.PTID.values
     dx = df_metadata.DX.values
     s = list(set(zip(subj, dx)))
     x, y = zip(*s)
@@ -90,17 +99,18 @@ def train(config_file, out_dir_name, crop):
     S_train, S_val, DX_train, DX_val = train_test_split(S_train, DX_train, test_size=.2, random_state=rd_seed)
 
     # Preprocess labels
-    label_dict = dict(zip(["NL", "MCI", "Dementia"], range(0, 3)))
+    label_dict = dict(zip(["NL", "MCI", "AD"], range(0, 3)))
 
     # GET CORRESPONDING DX AND PATHS OF SAID SUBJECTS
-    X_train = df_metadata[df_metadata["subj"].isin(S_train)].path.values
-    Y_train = df_metadata[df_metadata["subj"].isin(S_train)].DX.map(label_dict, na_action='ignore').values
+    X_train = df_metadata[df_metadata["PTID"].isin(S_train)].path.values
+    Y_train = df_metadata[df_metadata["PTID"].isin(S_train)].DX.map(label_dict, na_action='ignore').values
 
-    X_valid = df_metadata[df_metadata["subj"].isin(S_train)].path.values
-    Y_valid = df_metadata[df_metadata["subj"].isin(S_train)].DX.map(label_dict, na_action='ignore').values
+    X_valid = df_metadata[df_metadata["PTID"].isin(S_val)].path.values
+    Y_valid = df_metadata[df_metadata["PTID"].isin(S_val)].DX.map(label_dict, na_action='ignore').values
 
     # Load neural network parameters
-    batch_size = config["model"]["batch_size"]
+    batch_size = int(config["model"]["batch_size"])
+    epochs = int(config["model"]["epochs"])
     weights_file = config["model"]["weights"]
     mean_file = config["model"]["mean"]
     mean = np.load(mean_file)
@@ -112,23 +122,46 @@ def train(config_file, out_dir_name, crop):
     mean = np.mean(mean, axis=0)
 
     # Create generator File
-    BrainSeq = BrainSequence(X_train, to_categorical(Y_train), 1, mean)
-    BrainSeq_val = BrainSequence(X_valid, to_categorical(Y_valid), 1, mean)
+    BrainSeq = BrainSequence(X_train, to_categorical(Y_train), batch_size, norm='mean',
+                             norm_param=mean, color=True, train=True, crop=False, img_aug=False)
+    BrainSeq_val = BrainSequence(X_valid, to_categorical(Y_valid), batch_size, norm='mean',
+                             norm_param=mean, color=True, train=False, crop=False, img_aug=False)
 
     # Initialize model
-    model = c3d_base(True, True, weights_file)
-    sgd = SGD(lr=1e-3, decay=1e-6, momentum=0.9, nesterov=True)
-    model.compile(optimizer=sgd, loss='categorical_crossentropy', metrics=['accuracy'])
+    print(new_img_size)
+    x, y, z = new_img_size
+    model = c3d_base(input_shape=(x, y, z, 3), weights=True, weights_file=weights_file)
+    # sgd = SGD(lr=1e-3, decay=1e-6, momentum=0.9, nesterov=True)
+    adam = Adam(lr=0.001, amsgrad=False)
+
+    model.compile(optimizer=adam, loss='categorical_crossentropy', metrics=['accuracy'])
+
     # Train
+    callb = TensorBoard(log_dir=out_dir + 'logs/', histogram_freq=0, batch_size=batch_size,
+                        write_graph=True, write_grads=True, write_images=False,
+                        embeddings_freq=0, embeddings_layer_names=None,
+                        embeddings_metadata=None, embeddings_data=None)
+
+    # use early stopping callback
+
     model.fit_generator(BrainSeq,
                         steps_per_epoch=None,
-                        epochs=1,
+                        epochs=epochs,
                         shuffle=True,
+                        callbacks=[callb],
                         verbose=1,
                         validation_data=BrainSeq_val)
 
-    predictions_valid = model.predict(X_valid, batch_size=batch_size, verbose=1)
-    score = log_loss(Y_valid, predictions_valid)
+    # Validate the model with a custom predictive function
+
+    X_test = df_metadata[df_metadata["subj"].isin(S_test)].path.values
+    Y_test = df_metadata[df_metadata["subj"].isin(S_test)].DX.map(label_dict, na_action='ignore').values
+
+    BrainSeq_test = BrainSequence(X_test, to_categorical(Y_test), batch_size, norm='mean',
+                             norm_param=mean, color=True, train=False, crop=False)
+
+    # evaluate
+    score = model.evaluate_generator(BrainSeq_test)
     print(score)
 
     print('Proces finished.')
