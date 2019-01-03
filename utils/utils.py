@@ -27,3 +27,15 @@ def resize_image(img, new_size):
                              or_in, new_spacing,
                              dir_in, 0.0, sitk.sitkFloat32)
     return out_sitk
+
+
+def extract_representation(model, seq, layer):
+    """
+    Given a model and a generator of images, extract the representation of a given layer
+    model: pretrained model
+    seq: generator of images that are adecuate to the model
+    layer: layer of the model we want to extract the representation
+
+    return a list of representation equal to the number of images provided by the generator.
+    """
+    print('NYI!')

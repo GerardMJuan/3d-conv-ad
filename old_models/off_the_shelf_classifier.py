@@ -1,12 +1,7 @@
-# -*- coding: utf-8 -*-
 """
-Main function that trains the model from input data, using a pretrained
-3DresNet.
+Baseline for AD classification using CNN.
 
-This function gathers the data and feeds tensors into the network, training it.
-module load cuDNN/7.0.5-CUDA-9.0.176
-module load CUDA/9.0.176
-"""
+This file serves as a testing file for 1) make sure that the segmentation works (this means that the weight transfer was done correctly) and 2) to create a baseline for AD classification that serves as a parting point for future work. """
 
 from utils.model import HighRes3DNet_base
 from utils.dataio import BrainSequence, load_img
@@ -18,10 +13,9 @@ import os
 import numpy as np
 import bids.layout
 from sklearn.cross_validation import train_test_split
-from sklearn.metrics import log_loss
-from keras.optimizers import SGD, Adam
 from keras.utils import to_categorical
-from keras.callbacks import TensorBoard
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
 
 # Parser
 def get_parser():
@@ -35,12 +29,13 @@ def get_parser():
     return parser
 
 
-def train(config_file, out_dir_name):
+def main(config_file, out_dir_name):
     """
-    Execute Main function for training.
+    Execute Main function for the classifier.
 
     Trains the model with a given dataset.
     """
+
     t0 = time.time()
     # Load configuration
     # Load the configuration of a given experiment.
@@ -100,7 +95,6 @@ def train(config_file, out_dir_name):
     # THOSE ARE SUBJECT NAMES
     rd_seed = 1714
     S_train, S_test, DX_train, DX_test = train_test_split(x, y, test_size=.2, random_state=rd_seed)
-    S_train, S_val, DX_train, DX_val = train_test_split(S_train, DX_train, test_size=.2, random_state=rd_seed)
 
     # Preprocess labels
     label_dict = dict(zip(["NL", "MCI", "AD"], range(0, 3)))
@@ -109,52 +103,27 @@ def train(config_file, out_dir_name):
     X_train = df_metadata[df_metadata["PTID"].isin(S_train)].path.values
     Y_train = df_metadata[df_metadata["PTID"].isin(S_train)].DX.map(label_dict, na_action='ignore').values
 
-    X_valid = df_metadata[df_metadata["PTID"].isin(S_val)].path.values
-    Y_valid = df_metadata[df_metadata["PTID"].isin(S_val)].DX.map(label_dict, na_action='ignore').values
-
     X_test = df_metadata[df_metadata["PTID"].isin(S_test)].path.values
     Y_test = df_metadata[df_metadata["PTID"].isin(S_test)].DX.map(label_dict, na_action='ignore').values
 
-    # Test: create list of images
-    # X_train_img = [load_img(x) for x in X_train]
-    # X_train_val = [load_img(x) for x in X_valid]
-    # Create generator File
+    # Create sequences of train/test (no really need for validation here)
     BrainSeq = BrainSequence(X_train, to_categorical(Y_train), batch_size, norm='hist',
                              norm_param=mean_file, train=True, crop=True)
-    BrainSeq_val = BrainSequence(X_valid, to_categorical(Y_valid), batch_size, norm='hist',
-                                 norm_param=mean_file, train=False, crop=True)
-
-    # Initialize model
-    model = HighRes3DNet_base(input_shape=(96, 96, 96, 1), weights=True, summary=True,
-                              weights_dir=config['model']['weights'])
-    # sgd = SGD(lr=1e-3, decay=1e-6, momentum=0.9, nesterov=True)
-    adam = Adam(lr=0.001, amsgrad=False)
-    model.compile(optimizer=adam, loss='categorical_crossentropy', metrics=['accuracy'])
-    # Train
-    callb = TensorBoard(log_dir=out_dir + 'logs/', histogram_freq=0, batch_size=batch_size,
-                        write_graph=True, write_grads=False, write_images=False,
-                        embeddings_freq=0, embeddings_layer_names=None,
-                        embeddings_metadata=None, embeddings_data=None)
-
-    model.fit_generator(BrainSeq,
-                        steps_per_epoch=None,
-                        epochs=epochs,
-                        shuffle=True,
-                        callbacks=[callb],
-                        verbose=1,
-                        validation_data=BrainSeq_val)
-
-    # TODO: Validate the model with a custom predictive function
     BrainSeq_test = BrainSequence(X_test, to_categorical(Y_test), batch_size, norm='hist',
                                   norm_param=mean_file, train=False, crop=True)
 
-    # evaluate
-    score = model.evaluate_generator(BrainSeq_test)
-    print(score)
+    # Load model
 
-    print('Proces finished.')
-    t1 = time.time()
-    print('Time to compute the script: ', t1 - t0)
+    model = HighRes3DNet_base(input_shape=(96, 96, 96, 1), weights=True, summary=True,
+                              weights_dir=config['model']['weights'])
+
+    # Extract representations and train the simple model
+    img_train = extractRepresentation(model, BrainSeq)
+    img_test = extractRepresentation(model, BrainSeq_test)
+
+    ad_svm = SVC()
+
+    ad_lr = LogisticRegression()
 
 
 if __name__ == '__main__':

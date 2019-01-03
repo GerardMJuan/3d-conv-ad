@@ -68,28 +68,8 @@ class BrainSequence(Sequence):
         for file in batch_x:
             # img = file
             img = load_img(file, self.new_size)
-            if self.norm == 'mean':
-                # Substract the mean of the trained set from the base images
-                img = img - self.norm_param
-            elif self.norm == 'hist':
-                # Convert image to 5d
-                img = img[np.newaxis, :, :, :, np.newaxis]
-
-                # Histogram normalization
-                # Create mask (will be full image)
-                image_mask = np.ones_like(img, dtype=np.bool)
-                # load mapping
-                mapping = read_mapping_file(self.norm_param)
-                # set cutoff
-                cutoff = (0.001, 0.999)
-                # transform img
-                img = transform_by_mapping(img, image_mask, mapping['Modality0'], cutoff, type_hist = 'percentile')
-
-                # return to 3d
-                img = img[0, :, :, :, 0]
-
-            # White normalization:
-            img = whitening_transformation(img)
+            # gaussian normalization:
+            img = normalization(img)
 
             # Crop image!
             # We return to three dimensions here!
@@ -115,7 +95,8 @@ class BrainSequence(Sequence):
         return batch_img, np.array(batch_y)
 
 
-def whitening_transformation(img):
+def normalization(img):
+    """ Substract mean, divide by std"""
     # make sure image is a monomodal volume
     img = (img - img.mean()) / max(img.std(), 1e-5)
     return img

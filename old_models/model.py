@@ -15,7 +15,7 @@ import os
 import numpy as np
 from contextlib import redirect_stdout
 
-def c3d_base(input_shape=(16, 112, 112, 3), weights=False, summary=True, weights_file=None):
+def c3d_base(input_shape=(16, 112, 112, 3), weights=False, weights_file=None):
     """
     Build base model for c3D using Seqential API.
 

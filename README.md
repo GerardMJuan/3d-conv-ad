@@ -1,33 +1,12 @@
 # 3d-conv-ad
-Implementation and testing of 3D convolutional neural networks for AD diagnosis
+Implementation and testing of 3D convolutional neural networks for AD diagnosis. This code can serve as a stepping point, as it is not finished. Need to keep working on it!
 
-This repository holds three different version of 3DCNN:
+## How to run on HPC UPF
+Just run the run_hpc.sh script. It is already prepared to work.
 
-1. Pre-trained model: 3D Res Net
+## What is left to do
+* Do the preprocessing before training. In short, complete the preprocessing.py script. Also, data augmentation.
+* Improve the model. Deeper, more complex than binary, etc.
+* Visualization and interpretation.
 
-Note: Currently, due to small network, batch size should be 1. We would need to test to reduce this:
-1.1- Reducing input Size
-1.2- Trying to select larger gpu (how?)
-1.3- Do multigpu training
-1.4- Fit full images and don't do cropping
-1.5 use cropping of only one axis ( smaller? isotropic/anisotropic?)
-
-Based from Li W., Wang G., Fidon L., Ourselin S., Cardoso M.J., Vercauteren
-T. (2017) On the Compactness, Efficiency, and Representation of 3D
-Convolutional Networks: Brain Parcellation as a Pretext Task. In:
-Niethammer M. et al. (eds) Information Processing in Medical Imaging.
-IPMI 2017. Lecture Notes in Computer Science, vol 10265. Springer, Cham.
-DOI: 10.1007/978-3-319-59050-9_28
-
-2. Pre trained model: C3d
-
-
-Note: Needs further testing and validation to be useful:
-1. Different input Size
-2. Different training parameters
-3. Do cropping and do not fit full images
-
-This model builds a base c3D network. http://vlg.cs.dartmouth.edu/c3d/
-
-
-3. From scratch model (NYI)
+Model is based on "Basu S, Wagstyl K, Zandifar A, Collins L, Romero A, Precup D. Analyzing Alzheimer’s Disease Progression from Sequential Magnetic Resonance Imaging Scans Using Deep 3D Convolutional Neural Networks. 2018;(Nips). Available from: https://www.doc.ic.ac.uk/~bglocker/public/mednips2018/med-nips_2018_paper_70.pdf"
