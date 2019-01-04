@@ -130,9 +130,6 @@ def main(config_file, out_dir_name):
 
     # Create callbacks
 
-    # Early stopping for reducing over-fitting risk
-    stopper = EarlyStopping(patience=1)
-
     # Model checkpoint to save the training results
     checkpointer = ModelCheckpoint(
         filepath=out_dir + "model_trained.h5",
@@ -159,7 +156,7 @@ def main(config_file, out_dir_name):
     # Callback to terminate on NaN loss (so terminate on error)
     NanLoss = TerminateOnNaN()
 
-    callbacks = [checkpointer, csv_logger, stopper, NanLoss, lrs]
+    callbacks = [checkpointer, csv_logger, NanLoss, lrs]
 
     # Train model
     model.fit_generator(BrainSeq,
