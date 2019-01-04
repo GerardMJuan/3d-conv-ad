@@ -92,7 +92,7 @@ class BrainSequence(Sequence):
 
         # concatenate arrays by 0 axis
         batch_img = np.stack(batch_img, axis=0)
-        return batch_img, np.array(batch_y)
+        return batch_img, [np.array(batch_y), batch_img]
 
 
 def normalization(img):
